@@ -89,3 +89,15 @@ models_results_df %>%
   theme(axis.text.x = element_text(angle = 90, hjust = 0.9))
 ```
   write interpretation
+  
+## Problem 2.
+  Load and clean data,convert numerical variables to factor 
+```{r warning = F, message=F}
+birthweight_df = read_csv('./data/birthweight.csv')
+birthweight_df = birthweight_df %>%
+  mutate_at(c('babysex','frace','mrace','malform'), funs(as.factor)) %>%
+  mutate(babysex = factor(babysex,labels = c("male", "female")),
+         malform = factor(malform,labels = c("absent", "present"))) # labels of mrace and frace are not changed since some levels of races are missing.
+skimr::skim(birthweight_df) # check missing values, results show that there is no NA, but all value of pnumlbw and pnumsga are 0s. Thus these two variables show be removed from dataset.
+birthweight_df = select(birthweight_df,-c(pnumsga,pnumlbw))
+```
