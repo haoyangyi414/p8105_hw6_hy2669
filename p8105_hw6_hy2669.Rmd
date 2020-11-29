@@ -14,7 +14,7 @@ knitr::opts_chunk$set(
   fig.height = 8,
   out.width = '90%'
 )
-theme_set(theme_minimal() + theme(legend.position = "bottom"))
+theme_set(theme_minimal() + theme(legend.position = "bottom")+ theme(plot.title = element_text(hjust = .5)))
 options(
   ggplot2.continuous.colour = "viridis",
   ggplot2.continuous.fill = "viridis"
@@ -22,6 +22,7 @@ options(
 
 scale_colour_discrete = scale_colour_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
+set.seed(111)
 ```
 
 ## Problem 1
@@ -100,4 +101,99 @@ birthweight_df = birthweight_df %>%
          malform = factor(malform,labels = c("absent", "present"))) # labels of mrace and frace are not changed since some levels of races are missing.
 skimr::skim(birthweight_df) # check missing values, results show that there is no NA, but all value of pnumlbw and pnumsga are 0s. Thus these two variables show be removed from dataset.
 birthweight_df = select(birthweight_df,-c(pnumsga,pnumlbw))
+```
+  Build my model:
+  
+  Using stepwise approaches to select a model, the basic principle is choosing a model by AIC in a stepwise algorithm. This methods develops a sequence of regression models, at each step adding or deleting a covariate.
+  
+  Process: 
+  1. For X1,X2...Xn, where n is the number of potential predictors, suppose X1 is the first variable added
+  
+  2. The next step is to fit all regressions with two X variables, X1 being one of them.For each regression a t-statistics of the new X is obtained 
+  
+  3. The new X variable with the largest t-stats (smallest p-value) is the next candidate.If t-stats > some predefined level, the second X is then added;If not, the program terminates.
+  
+  4. Suppose X2 was added second; the procedure now examines whether any of the other X variables already in the model should be dropped.The X value with the smallest t-stats (highest p-value) is dropped. 
+  
+  5. Repeat those process until Xn is considered in the model.
+  
+```{r}
+fit1 = lm(bwt ~ ., data = birthweight_df)
+step(fit1,trace = 0) # perform stepwise method, do not show the trace history. 
+```
+   Results shows that stepwise method picks bwt ~ babysex + bhead + blength + delwt + fincome + 
+    gaweeks + mheight + mrace + parity + ppwt + smoken as the selected model. 
+```{r bulid selected model}
+fit_birthweight = lm (bwt ~ babysex + bhead + blength + delwt + fincome + 
+    gaweeks + mheight + mrace + parity + ppwt + smoken, data = birthweight_df)
+
+```
+   Make a plot of model residuals against fitted values
+```{r}
+birthweight_df %>%
+  add_predictions(fit_birthweight) %>%
+  add_residuals(fit_birthweight) %>%
+  ggplot(aes(x = pred, y = resid))+ 
+  geom_point(alpha = 0.3)+
+  geom_smooth(method = 'lm', color = 'red')+
+  labs(x = 'fitted values of birthweight', y = 'model residuals', title = 'Model residuals against fitted values')
+```
+   The plot shows that there is no linear relationship between fitted values and residuals of models since the lm-smooth line is extremely close to the x-axis. Center of model residuals' distribution is around 0.
+   
+### Make cross validations
+Compare my model with two models:
+fit_maineffect = lm(bwt ~ blength + gaweeks ,data = birthweight_df) 
+fit_interaction = lm(bwt ~ bhead + blength + babysex + bhead * blength + bhead * babysex + blength * babysex + bhead * blength * babysex , data = birthweight_df)
+```{r}
+cv_birthweight = crossv_mc(birthweight_df, 200) %>%
+  mutate(train = map(train, as.tibble),
+         test = map(test,as.tibble)) # create dataframe with train&test groups.
+
+cv_birthweight = cv_birthweight %>%  # get rmse of each model(build in train group) on test group
+    mutate(my_model = map(train,~lm(bwt ~ babysex + bhead + blength + delwt + fincome + 
+           gaweeks + mheight + mrace + parity + ppwt + smoken, data = .x)),
+           maineffect_model = map(train,~lm(bwt ~ blength + gaweeks, data = .x)),
+           interaction_model = map(train,~lm(bwt ~ bhead + blength + babysex + bhead * blength + bhead * babysex + blength * babysex + bhead * blength * babysex, data = .x))) %>% 
+  
+    mutate(rmse_my_model = map2_dbl(my_model, test, ~rmse(model = .x,data = .y)),
+           rmse_maineffect_model = map2_dbl(maineffect_model, test, ~rmse(model = .x,data = .y)),
+           rmse_interaction_model = map2_dbl(interaction_model, test, ~rmse(model = .x,data = .y)))
+
+cv_birthweight %>% # make plot of rmse
+  dplyr::select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) %>% 
+  mutate(model = fct_reorder(model,rmse)) %>% 
+  ggplot(aes(x = model, y = rmse)) +
+  geom_violin() +
+  labs(title = "Comparisons of RMSE in cross validation",
+       x = "Model",
+       y = "RMSE")
+    
+```
+    This plot shows that my model has the lowest RMSE among three models and considered as the best model of the three, main effect model has the highest RMSE and considered as the worst model of the three. Residual vs fitted value plot (As diagnose of residual's distribution) and RMSE plot indicate that my model with stepwise method has relatively good performance in linear regression of baby's birthweight.
+    
+## Problem 3
+Read and tidy the data
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+  5000 bootstrap
+```{r}
+bootstrap_df = weather_df %>%
+  bootstrap(n = 5000)
 ```
