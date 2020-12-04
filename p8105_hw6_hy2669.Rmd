@@ -87,9 +87,10 @@ models_results_df %>%
   ggplot(aes(x = city_state, y = OR)) + 
   geom_point() + 
   geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper)) + 
-  theme(axis.text.x = element_text(angle = 90, hjust = 0.9))
+  theme(axis.text.x = element_text(angle = 90, hjust = 0.9)) +
+  labs(title = 'Estimates of the OR for solving homicides in US cities')
 ```
-  write interpretation
+  This plot shows that estimates of OR for many cities are above 1 which is null hypothesis value(No differences between White and Black), especially in cities such as Boston, Omaha and Oakland. It means that the odds of a homicide case ending in arrest are greater when the victim is white compared to Black, which indicates the racial disparity in law enforcement in many cities (when the victims are White, police may pay more attention to the case).
   
 ## Problem 2.
   Load and clean data,convert numerical variables to factor 
@@ -192,8 +193,56 @@ weather_df =
     tmax = tmax / 10) %>%
   select(name, id, everything())
 ```
-  5000 bootstrap
-```{r}
+  5000 bootstraps
+```{r warning = F}
 bootstrap_df = weather_df %>%
-  bootstrap(n = 5000)
+  bootstrap(n = 500,id = "id") %>%
+  mutate(model = map(strap, ~lm(tmax ~ tmin, data = .x)),
+         glance_r = map(model, broom::glance),
+         tidy_beta = map(model, broom::tidy)) %>%
+  unnest(glance_r,tidy_beta) %>%  
+  select(id,term,estimate,r.squared) %>%
+  mutate(term = recode(term, 
+                       "(Intercept)" = "beta_0",
+                       "tmin" = "beta_1")) %>%
+  select(id,r.squared,term, estimate) %>%
+  pivot_wider( names_from = term,
+               values_from = estimate) %>%
+  mutate(log_beta = log(beta_1 * beta_0)) 
+```
+distribution of estimate of \(\hat{r^2}\)
+```{r}
+rsquare_plot = bootstrap_df %>%
+  ggplot(aes(x = r.squared, y = ..density..))+
+  geom_histogram(fill = "blue", alpha = .4) +
+  geom_density(aes( x = r.squared, y = ..density..)) +
+  theme_bw() +
+  labs(title = "Distribution for r^2 estimate by bootstrap",
+       x = "estimate of r^2",
+       y = " Count") +
+  theme(plot.title = element_text(hjust = .5 ))
+rsquare_plot
+```
+distribution of \(log(\hat{\beta_0}*\hat{\beta_1})\)
+```{r}
+logtrans_plot = bootstrap_df %>%
+  ggplot(aes(x = log_beta, y = ..density..))+
+  geom_histogram(fill = "blue", alpha = .5) +
+  geom_density(aes( x = log_beta, y = ..density..)) +
+  theme_bw() +
+  labs(title = "Distribution for log(β̂0β̂1) by bootstrap",
+       x = "log(β̂0β̂1) ",
+       y = " Count") +
+  theme(plot.title = element_text(hjust = .5 ))
+logtrans_plot
+```
+95% CI for \(\hat{r^2}\)
+```{r}
+quantile(bootstrap_df$r.squared, probs = c(0.025,0.975)) %>% 
+  knitr::kable(caption = "95% CI for R_Square") # The 95% CI for r^2 is 0.893-0.926
+```
+95% CI for \(log(\hat{\beta_0}*\hat{\beta_1})\)
+```{r}
+quantile(bootstrap_df$log_beta, probs = c(0.025,0.975)) %>% 
+  knitr::kable(caption = "95% CI for log(β̂0β̂1)") # The 95% CI for r^2 is 1.961-2.054
 ```
