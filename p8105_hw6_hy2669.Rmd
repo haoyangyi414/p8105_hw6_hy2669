@@ -196,7 +196,7 @@ weather_df =
   5000 bootstraps
 ```{r warning = F}
 bootstrap_df = weather_df %>%
-  bootstrap(n = 500,id = "id") %>%
+  bootstrap(n = 5000,id = "id") %>%
   mutate(model = map(strap, ~lm(tmax ~ tmin, data = .x)),
          glance_r = map(model, broom::glance),
          tidy_beta = map(model, broom::tidy)) %>%
@@ -210,7 +210,7 @@ bootstrap_df = weather_df %>%
                values_from = estimate) %>%
   mutate(log_beta = log(beta_1 * beta_0)) 
 ```
-distribution of estimate of \(\hat{r^2}\)
+distribution of estimate of r^2
 ```{r}
 rsquare_plot = bootstrap_df %>%
   ggplot(aes(x = r.squared, y = ..density..))+
@@ -223,26 +223,32 @@ rsquare_plot = bootstrap_df %>%
   theme(plot.title = element_text(hjust = .5 ))
 rsquare_plot
 ```
-distribution of \(log(\hat{\beta_0}*\hat{\beta_1})\)
+
+In the plot of distribution, the estimate of r^2 nearly follows a normal distribution which means the results of bootstrap is close to ideal. and the mean of normal distribution is around 0.91 which means the performance of model is good (when r^2 is close to 1), so tmax can be well predicted by tmin in simple linear regression. 
+
+distribution of log(hat(β_0)*hat(β_1))
 ```{r}
 logtrans_plot = bootstrap_df %>%
   ggplot(aes(x = log_beta, y = ..density..))+
   geom_histogram(fill = "blue", alpha = .5) +
   geom_density(aes( x = log_beta, y = ..density..)) +
   theme_bw() +
-  labs(title = "Distribution for log(β̂0β̂1) by bootstrap",
-       x = "log(β̂0β̂1) ",
+  labs(title = "Distribution for log(hat(β_0)*hat(β_1)) by bootstrap",
+       x = "log(hat(β_0)*hat(β_1)) ",
        y = " Count") +
   theme(plot.title = element_text(hjust = .5 ))
 logtrans_plot
 ```
-95% CI for \(\hat{r^2}\)
+
+In the plot of distribution, the estimate of log(hat(β_0)*hat(β_1)) nearly follows a normal distribution which means the results of bootstrap is close to ideal.
+
+95% CI for r^2
 ```{r}
 quantile(bootstrap_df$r.squared, probs = c(0.025,0.975)) %>% 
-  knitr::kable(caption = "95% CI for R_Square") # The 95% CI for r^2 is 0.893-0.926
+  knitr::kable() # The 95% CI for r^2 is 0.893-0.926
 ```
-95% CI for \(log(\hat{\beta_0}*\hat{\beta_1})\)
+95% CI for log(hat(β_0)*hat(β_1))
 ```{r}
 quantile(bootstrap_df$log_beta, probs = c(0.025,0.975)) %>% 
-  knitr::kable(caption = "95% CI for log(β̂0β̂1)") # The 95% CI for r^2 is 1.961-2.054
+  knitr::kable() # The 95% CI for log(hat(β_0)*hat(β_1)) is 1.961-2.054
 ```
